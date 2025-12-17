@@ -8,8 +8,99 @@
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- Markdown renderer (marked) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
   <!-- Optional local CSS (can be empty) -->
   <link rel="stylesheet" href="./style.css?v=20251217-1" />
+
+  <!-- Minimal markdown styles -->
+  <style>
+    .md h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin: 1rem 0 0.5rem;
+    }
+
+    .md h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin: 1rem 0 0.5rem;
+    }
+
+    .md h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0.75rem 0 0.5rem;
+    }
+
+    .md p {
+      margin: 0.5rem 0;
+    }
+
+    .md ul {
+      list-style: disc;
+      padding-left: 1.5rem;
+      margin: 0.5rem 0;
+    }
+
+    .md ol {
+      list-style: decimal;
+      padding-left: 1.5rem;
+      margin: 0.5rem 0;
+    }
+
+    .md li {
+      margin: 0.25rem 0;
+    }
+
+    .md blockquote {
+      border-left: 4px solid #e2e8f0;
+      padding-left: 0.75rem;
+      color: #475569;
+      margin: 0.75rem 0;
+    }
+
+    .md code {
+      background: #f1f5f9;
+      padding: 0.1rem 0.3rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    .md pre {
+      background: #020617;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .md a {
+      color: #0284c7;
+      text-decoration: underline;
+    }
+
+    .md table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+    }
+
+    .md th,
+    .md td {
+      border: 1px solid #e2e8f0;
+      padding: 0.5rem;
+    }
+
+    .md th {
+      background: #f8fafc;
+      font-weight: 700;
+    }
+  </style>
 </head>
 
 <body class="bg-slate-50 text-slate-900">
@@ -221,6 +312,11 @@
   </div>
 
   <script>
+    // marked settings (avoid header ids / mangling)
+    if (window.marked) {
+      marked.setOptions({ headerIds: false, mangle: false });
+    }
+
     const toolSelect = document.getElementById("tool");
     const runBtn = document.getElementById("run");
     const clearBtn = document.getElementById("clear");
@@ -337,7 +433,7 @@
       return null;
     }
 
-    // Existing behavior: some proxies nest JSON in content[...].text
+    // Prefer nested JSON result, but fallback to plain text for read/ask-like responses
     function getMcpInnerResult(apiResult) {
       if (!apiResult || !apiResult.content || !Array.isArray(apiResult.content)) return null;
       const textPart = apiResult.content.find(x => x && x.type === "text" && typeof x.text === "string");
@@ -346,8 +442,8 @@
       const inner = safeJsonParse(textPart.text);
       if (inner && inner.content && typeof inner.content === "object") return inner.content.result ?? null;
 
-      // If not nested JSON, some tools return plain text or other format
-      return null;
+      // fallback: use raw text (read_documentation often returns markdown text)
+      return textPart.text;
     }
 
     function renderErrorBox(text) {
@@ -359,9 +455,24 @@
       `;
     }
 
+    function renderMarkdownToHtmlCard(title, markdownText) {
+      const md = String(markdownText || "");
+      const html = (window.marked ? marked.parse(md) : `<pre>${escapeHtml(md)}</pre>`);
+
+      renderEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-sm font-semibold text-slate-800">${escapeHtml(title)}</div>
+          <div class="mt-3 md text-sm text-slate-800 leading-relaxed">${html}</div>
+        </div>
+      `;
+    }
+
+    // ask response is custom: { summary: "...(markdown)...", refs: [...] }
     function renderAskResult(apiJson) {
       const summary = apiJson?.summary || "";
       const refs = Array.isArray(apiJson?.refs) ? apiJson.refs : [];
+
+      const html = (window.marked ? marked.parse(String(summary || "")) : `<pre>${escapeHtml(String(summary || ""))}</pre>`);
 
       const refList = refs.length
         ? `<div class="mt-4">
@@ -383,13 +494,14 @@
       renderEl.innerHTML = `
         <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div class="text-sm font-semibold text-slate-800">要約</div>
-          <div class="mt-3 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(summary)}</div>
+          <div class="mt-3 md text-sm text-slate-800 leading-relaxed">${html}</div>
           ${refList}
         </div>
       `;
     }
 
     function renderSearchResults(items) {
+      // items could be null if parsing failed
       if (!Array.isArray(items) || items.length === 0) {
         renderEl.innerHTML = `<div class="text-slate-600">結果がありませんでした。</div>`;
         return;
@@ -437,6 +549,7 @@
       });
     }
 
+    // read_documentation: render markdown as HTML, keep copy button for raw markdown
     function renderReadResult(markdownText) {
       const md = String(markdownText || "");
       lastReadMarkdown = md;
@@ -444,11 +557,8 @@
       copyBtn.disabled = !md;
       copyBtn.classList.remove("hidden");
 
-      renderEl.innerHTML = `
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(md)}</div>
-        </div>
-      `;
+      // markdown -> html
+      renderMarkdownToHtmlCard("Markdown（表示）", md);
     }
 
     function renderRecommend(items) {
@@ -509,7 +619,6 @@
     }
 
     function renderAvailability(itemsOrObj) {
-      // Tool says it returns "a list of dictionaries". We'll handle both list/object.
       if (Array.isArray(itemsOrObj)) {
         if (itemsOrObj.length === 0) {
           renderEl.innerHTML = `<div class="text-slate-600">結果がありませんでした。</div>`;
@@ -549,7 +658,6 @@
         return;
       }
 
-      // fallback object
       renderEl.innerHTML = `
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(JSON.stringify(itemsOrObj, null, 2))}</div>
@@ -572,7 +680,6 @@
       }
     });
 
-    // ★ tool -> API path mapping
     function apiPathForTool(tool) {
       if (tool === "aws___search_documentation") return "/api/search";
       if (tool === "aws___ask") return "/api/ask";
@@ -619,7 +726,6 @@
     }
 
     function buildAvailabilityParams() {
-      // JSON override first
       const jsonText = (document.getElementById("gaJson").value || "").trim();
       if (jsonText) {
         const j = safeJsonParse(jsonText);
@@ -710,7 +816,6 @@
         const apiJson = parsed.value;
         rawEl.textContent = JSON.stringify(apiJson, null, 2);
 
-        // outer envelope error
         const outerErr = getErrorText(apiJson);
         if (outerErr) {
           renderErrorBox(outerErr);
@@ -718,7 +823,6 @@
           return;
         }
 
-        // ask は独自形式（summary/refs/search）
         if (tool === "aws___ask") {
           renderAskResult(apiJson);
           setStatus("完了");
