@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>AWS Knowledge MCP Browser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Optional local CSS (can be empty) -->
+  <link rel="stylesheet" href="./style.css?v=20251217-1" />
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-5xl mx-auto p-5 md:p-8 space-y-6">
+    <header class="space-y-3">
+      <h1 class="text-2xl md:text-3xl font-bold">AWS Knowledge MCP Browser</h1>
+
+      <div class="text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 md:p-4">
+        <ul class="list-disc pl-5 space-y-1 text-sm md:text-base">
+          <li><span class="font-semibold">search_documentation</span>: AWSドキュメント検索（topicsで絞り込み可）</li>
+          <li><span class="font-semibold">ask（Bedrock要約）</span>: 検索→上位ページread→Bedrockで要約して回答</li>
+          <li><span class="font-semibold">read_documentation</span>: AWSドキュメントURLをMarkdown化</li>
+          <li><span class="font-semibold">recommend</span>: ドキュメントURLに基づく関連ページ推薦</li>
+          <li><span class="font-semibold">list_regions</span>: AWSリージョン一覧取得</li>
+          <li><span class="font-semibold">get_regional_availability</span>: 指定リージョンでの提供状況（product/api/cfn）</li>
+        </ul>
+      </div>
+    </header>
+
+    <!-- Main card -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 space-y-5">
+      <!-- Tool -->
+      <div class="space-y-2">
+        <label class="font-semibold">Tool</label>
+        <select id="tool" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400">
+          <option value="aws___search_documentation">search_documentation</option>
+          <option value="aws___ask">ask（Bedrock要約）</option>
+          <option value="aws___read_documentation">read_documentation</option>
+          <option value="aws___recommend">recommend</option>
+          <option value="aws___list_regions">list_regions</option>
+          <option value="aws___get_regional_availability">get_regional_availability</option>
+        </select>
+        <p class="text-xs text-slate-500">※UIのTool名は表示用です（API側で /api/* にルーティングします）</p>
+      </div>
+
+      <!-- Search phrase -->
+      <div class="space-y-2" id="search-phrase-field">
+        <label class="font-semibold">Search Phrase</label>
+        <input id="searchPhrase" type="text" placeholder="例: IAM の仕組" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+      </div>
+
+      <!-- Topics -->
+      <div class="space-y-2" id="topics-field">
+        <div class="flex items-end justify-between gap-3">
+          <label class="font-semibold">Topics（任意・最大3）</label>
+          <span id="topicsHint" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+            Topics は最大3つまでです
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="general" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">general</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="reference_documentation" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">reference_documentation</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="current_awareness" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">current_awareness</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="troubleshooting" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">troubleshooting</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="amplify_docs" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">amplify_docs</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="cdk_docs" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">cdk_docs</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="cdk_constructs" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">cdk_constructs</span>
+          </label>
+
+          <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer select-none hover:bg-slate-100">
+            <input type="checkbox" name="topics" value="cloudformation" class="h-4 w-4 accent-sky-600" />
+            <span class="font-medium">cloudformation</span>
+          </label>
+        </div>
+
+        <p class="text-sm text-slate-600">limit は <span class="font-semibold">10 固定</span> です。</p>
+      </div>
+
+      <!-- Ask options -->
+      <div class="space-y-2 hidden" id="ask-options-field">
+        <label class="font-semibold">Ask options（任意）</label>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-sm font-semibold">read_top_k（0〜5）</label>
+            <input id="askReadTopK" type="number" min="0" max="5" value="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+            <div class="text-xs text-slate-500">search上位K件をreadして本文ベースで要約します（おすすめ: 3）。</div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-sm font-semibold">read_max_length（500〜20000）</label>
+            <input id="askReadMaxLen" type="number" min="500" max="20000" value="6000" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+            <div class="text-xs text-slate-500">1ページあたりのread量（おすすめ: 6000）。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- URL input (read/recommend) -->
+      <div class="space-y-2 hidden" id="url-field">
+        <label class="font-semibold">URL</label>
+        <input id="urlInput" type="text" placeholder="https://docs.aws.amazon.com/..." class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+      </div>
+
+      <!-- list_regions (no input) -->
+      <div class="space-y-2 hidden" id="list-regions-field">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          入力は不要です。「実行」を押すとリージョン一覧を取得します。
+        </div>
+      </div>
+
+      <!-- get_regional_availability inputs (schema-based) -->
+      <div class="space-y-3 hidden" id="regional-availability-field">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-sm font-semibold">region（必須）</label>
+            <input id="gaRegion" type="text" placeholder="例: ap-northeast-1" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+            <div class="text-xs text-slate-500">list_regions で取得した region_id をそのまま入れてください。</div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-sm font-semibold">resource_type（必須）</label>
+            <select id="gaResourceType" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400">
+              <option value="product">product（製品/機能）</option>
+              <option value="api">api（SDKサービス/操作）</option>
+              <option value="cfn">cfn（CloudFormationリソース）</option>
+            </select>
+            <div class="text-xs text-slate-500">
+              例: product → "Amazon S3" / api → "EC2" or "IAM+GetSSHPublicKey" / cfn → "AWS::Lambda::Function"
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="font-semibold">filters（任意・複数可）</label>
+          <input id="gaFilters" type="text" placeholder='例: Amazon S3, Amazon EC2  /  例(api): IAM+GetSSHPublicKey, EC2  /  例(cfn): AWS::Lambda::Function' class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+          <div class="text-xs text-slate-500">カンマ区切りで複数指定できます（配列に変換して送信します）。</div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="font-semibold">next_token（任意）</label>
+          <input id="gaNextToken" type="text" placeholder="filters無しで全件取得する場合に、次ページ取得に使います" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        </div>
+
+        <!-- JSON override -->
+        <div class="space-y-2">
+          <div class="flex items-end justify-between gap-3">
+            <label class="font-semibold">JSON（任意・上書き）</label>
+            <span id="jsonHint" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+              JSONが不正です（フォーム入力で実行します）
+            </span>
+          </div>
+          <textarea id="gaJson" rows="6" placeholder='例: { "region": "ap-northeast-1", "resource_type": "cfn", "filters": ["AWS::Lambda::Function"] }' class="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
+          <div class="text-xs text-slate-500">
+            JSON が有効なら JSON を優先します（スキーマ: region/resource_type 必須）。
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-3">
+        <button id="run" class="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700 active:bg-sky-800">
+          実行
+        </button>
+
+        <button id="clear" class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+          クリア
+        </button>
+
+        <span id="status" class="text-sm text-slate-600"></span>
+      </div>
+    </section>
+
+    <!-- Result -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-bold">結果</h2>
+
+        <!-- Copy Markdown (read_documentation only) -->
+        <button id="copyBtn" class="hidden text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 active:bg-slate-200 transition">
+          📋 Markdownをコピー
+        </button>
+      </div>
+
+      <div id="render" class="space-y-3"></div>
+
+      <details class="mt-4">
+        <summary class="cursor-pointer text-sm text-slate-600">Raw（デバッグ用）</summary>
+        <pre id="raw" class="mt-2 whitespace-pre-wrap text-xs bg-slate-950 text-slate-100 rounded-lg p-4 overflow-auto max-h-[420px]"></pre>
+      </details>
+    </section>
+  </div>
+
+  <script>
+    const toolSelect = document.getElementById("tool");
+    const runBtn = document.getElementById("run");
+    const clearBtn = document.getElementById("clear");
+    const statusEl = document.getElementById("status");
+
+    const searchField = document.getElementById("search-phrase-field");
+    const topicsField = document.getElementById("topics-field");
+    const askOptionsField = document.getElementById("ask-options-field");
+    const urlField = document.getElementById("url-field");
+    const listRegionsField = document.getElementById("list-regions-field");
+    const regionalAvailabilityField = document.getElementById("regional-availability-field");
+
+    const renderEl = document.getElementById("render");
+    const rawEl = document.getElementById("raw");
+    const copyBtn = document.getElementById("copyBtn");
+
+    const topicsHint = document.getElementById("topicsHint");
+    const topicCheckboxes = Array.from(document.querySelectorAll("input[name='topics']"));
+
+    const jsonHint = document.getElementById("jsonHint");
+
+    let lastReadMarkdown = "";
+
+    function setStatus(msg) { statusEl.textContent = msg || ""; }
+
+    function clearOutput() {
+      renderEl.innerHTML = "";
+      rawEl.textContent = "";
+      setStatus("");
+      lastReadMarkdown = "";
+      copyBtn.classList.add("hidden");
+      copyBtn.disabled = true;
+      copyBtn.textContent = "📋 Markdownをコピー";
+      copyBtn.classList.remove("text-green-700");
+    }
+
+    function updateForm() {
+      const tool = toolSelect.value;
+
+      searchField.classList.add("hidden");
+      topicsField.classList.add("hidden");
+      askOptionsField.classList.add("hidden");
+      urlField.classList.add("hidden");
+      listRegionsField.classList.add("hidden");
+      regionalAvailabilityField.classList.add("hidden");
+
+      if (tool === "aws___search_documentation" || tool === "aws___ask") {
+        searchField.classList.remove("hidden");
+        topicsField.classList.remove("hidden");
+        if (tool === "aws___ask") askOptionsField.classList.remove("hidden");
+      } else if (tool === "aws___read_documentation" || tool === "aws___recommend") {
+        urlField.classList.remove("hidden");
+      } else if (tool === "aws___list_regions") {
+        listRegionsField.classList.remove("hidden");
+      } else if (tool === "aws___get_regional_availability") {
+        regionalAvailabilityField.classList.remove("hidden");
+      }
+
+      if (tool === "aws___read_documentation") {
+        copyBtn.classList.remove("hidden");
+        copyBtn.disabled = true;
+      } else {
+        copyBtn.classList.add("hidden");
+        copyBtn.disabled = true;
+      }
+    }
+
+    toolSelect.addEventListener("change", () => {
+      updateForm();
+      clearOutput();
+    });
+    updateForm();
+
+    function flashTopicsHint() {
+      topicsHint.classList.remove("hidden");
+      setTimeout(() => topicsHint.classList.add("hidden"), 1600);
+    }
+
+    topicCheckboxes.forEach(cb => {
+      cb.addEventListener("change", () => {
+        const checked = topicCheckboxes.filter(x => x.checked);
+        if (checked.length > 3) {
+          cb.checked = false;
+          flashTopicsHint();
+        }
+      });
+    });
+
+    function flashJsonHint() {
+      jsonHint.classList.remove("hidden");
+      setTimeout(() => jsonHint.classList.add("hidden"), 1600);
+    }
+
+    function safeJsonParse(s) { try { return JSON.parse(s); } catch { return null; } }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttr(s) { return escapeHtml(s).replaceAll("\n", " "); }
+
+    // If MCP proxy returns error in the outer envelope, show it.
+    function getErrorText(apiResult) {
+      if (!apiResult) return null;
+      if (apiResult.isError && Array.isArray(apiResult.content)) {
+        const t = apiResult.content.find(x => x && x.type === "text" && typeof x.text === "string");
+        return t ? t.text : "Unknown error";
+      }
+      return null;
+    }
+
+    // Existing behavior: some proxies nest JSON in content[...].text
+    function getMcpInnerResult(apiResult) {
+      if (!apiResult || !apiResult.content || !Array.isArray(apiResult.content)) return null;
+      const textPart = apiResult.content.find(x => x && x.type === "text" && typeof x.text === "string");
+      if (!textPart) return null;
+
+      const inner = safeJsonParse(textPart.text);
+      if (inner && inner.content && typeof inner.content === "object") return inner.content.result ?? null;
+
+      // If not nested JSON, some tools return plain text or other format
+      return null;
+    }
+
+    function renderErrorBox(text) {
+      renderEl.innerHTML = `
+        <div class="text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+          <div class="font-semibold">Error</div>
+          <div class="mt-2 text-sm whitespace-pre-wrap">${escapeHtml(String(text || "").slice(0, 4000))}</div>
+        </div>
+      `;
+    }
+
+    function renderAskResult(apiJson) {
+      const summary = apiJson?.summary || "";
+      const refs = Array.isArray(apiJson?.refs) ? apiJson.refs : [];
+
+      const refList = refs.length
+        ? `<div class="mt-4">
+            <div class="text-sm font-semibold text-slate-800">参考URL</div>
+            <ul class="mt-2 list-disc pl-5 space-y-1 text-sm">
+              ${refs.map(r => {
+          const title = r.title || r.url || "(link)";
+          const url = r.url || "";
+          return `<li>
+                  <a class="text-sky-700 hover:underline break-all" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">
+                    ${escapeHtml(title)}
+                  </a>
+                </li>`;
+        }).join("")}
+            </ul>
+          </div>`
+        : "";
+
+      renderEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="text-sm font-semibold text-slate-800">要約</div>
+          <div class="mt-3 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(summary)}</div>
+          ${refList}
+        </div>
+      `;
+    }
+
+    function renderSearchResults(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        renderEl.innerHTML = `<div class="text-slate-600">結果がありませんでした。</div>`;
+        return;
+      }
+
+      const cards = items.map(it => {
+        const title = it.title || "(no title)";
+        const url = it.url || "";
+        const context = it.context || "";
+
+        return `
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <a href="${url}" target="_blank" rel="noopener noreferrer"
+                 class="text-sky-700 hover:underline font-semibold leading-snug">
+                ${escapeHtml(title)}
+              </a>
+              <button class="copy-url text-xs rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50"
+                      data-copy="${escapeAttr(url)}">
+                URLコピー
+              </button>
+            </div>
+            <div class="mt-1 text-xs text-slate-500 break-all">${escapeHtml(url)}</div>
+            <div class="mt-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml(context)}</div>
+          </div>
+        `;
+      }).join("");
+
+      renderEl.innerHTML = `<div class="space-y-3">${cards}</div>`;
+
+      renderEl.querySelectorAll(".copy-url").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const text = btn.getAttribute("data-copy") || "";
+          try {
+            await navigator.clipboard.writeText(text);
+            const original = btn.textContent;
+            btn.textContent = "コピー済";
+            setTimeout(() => btn.textContent = original, 900);
+          } catch {
+            const original = btn.textContent;
+            btn.textContent = "失敗";
+            setTimeout(() => btn.textContent = original, 900);
+          }
+        });
+      });
+    }
+
+    function renderReadResult(markdownText) {
+      const md = String(markdownText || "");
+      lastReadMarkdown = md;
+
+      copyBtn.disabled = !md;
+      copyBtn.classList.remove("hidden");
+
+      renderEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(md)}</div>
+        </div>
+      `;
+    }
+
+    function renderRecommend(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        renderEl.innerHTML = `<div class="text-slate-600">推薦がありませんでした。</div>`;
+        return;
+      }
+
+      const cards = items.map(it => {
+        const title = it.title || "(no title)";
+        const url = it.url || "";
+        const context = it.context || "";
+
+        return `
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <a href="${url}" target="_blank" rel="noopener noreferrer"
+               class="text-sky-700 hover:underline font-semibold">
+              ${escapeHtml(title)}
+            </a>
+            <div class="mt-1 text-xs text-slate-500 break-all">${escapeHtml(url)}</div>
+            ${context ? `<div class="mt-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml(context)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+
+      renderEl.innerHTML = `<div class="space-y-3">${cards}</div>`;
+    }
+
+    function renderRegions(items) {
+      if (Array.isArray(items) && items.length > 0) {
+        const cards = items.map(it => {
+          if (typeof it === "string") {
+            return `
+              <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="font-semibold text-slate-900">${escapeHtml(it)}</div>
+              </div>
+            `;
+          }
+          const name = it.region_id || it.name || it.region || it.id || it.code || "(region)";
+          const desc = it.region_long_name || it.description || it.label || it.long_name || "";
+          return `
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div class="font-semibold text-slate-900">${escapeHtml(String(name))}</div>
+              ${desc ? `<div class="mt-1 text-sm text-slate-700">${escapeHtml(String(desc))}</div>` : ""}
+              <div class="mt-3 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 whitespace-pre-wrap">${escapeHtml(JSON.stringify(it, null, 2))}</div>
+            </div>
+          `;
+        }).join("");
+        renderEl.innerHTML = `<div class="space-y-3">${cards}</div>`;
+        return;
+      }
+
+      renderEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(JSON.stringify(items, null, 2))}</div>
+        </div>
+      `;
+    }
+
+    function renderAvailability(itemsOrObj) {
+      // Tool says it returns "a list of dictionaries". We'll handle both list/object.
+      if (Array.isArray(itemsOrObj)) {
+        if (itemsOrObj.length === 0) {
+          renderEl.innerHTML = `<div class="text-slate-600">結果がありませんでした。</div>`;
+          return;
+        }
+
+        const cards = itemsOrObj.map((it) => {
+          const title =
+            it.resource ||
+            it.resource_id ||
+            it.id ||
+            it.name ||
+            it.filter ||
+            it.identifier ||
+            "(resource)";
+
+          const available = it.isAvailableIn || it.available || it.availableIn;
+          const notAvailable = it.isNotAvailableIn || it.notAvailable || it.notAvailableIn;
+          const planned = it.isPlannedIn || it.plannedIn;
+
+          return `
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div class="font-semibold text-slate-900">${escapeHtml(String(title))}</div>
+
+              <div class="mt-3 space-y-2 text-sm">
+                ${available ? `<div><span class="font-semibold text-green-700">isAvailableIn</span>: <span class="text-slate-700">${escapeHtml(JSON.stringify(available))}</span></div>` : ""}
+                ${notAvailable ? `<div><span class="font-semibold text-red-700">isNotAvailableIn</span>: <span class="text-slate-700">${escapeHtml(JSON.stringify(notAvailable))}</span></div>` : ""}
+                ${planned ? `<div><span class="font-semibold text-amber-700">isPlannedIn</span>: <span class="text-slate-700">${escapeHtml(JSON.stringify(planned))}</span></div>` : ""}
+              </div>
+
+              <div class="mt-3 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 whitespace-pre-wrap">${escapeHtml(JSON.stringify(it, null, 2))}</div>
+            </div>
+          `;
+        }).join("");
+
+        renderEl.innerHTML = `<div class="space-y-3">${cards}</div>`;
+        return;
+      }
+
+      // fallback object
+      renderEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(JSON.stringify(itemsOrObj, null, 2))}</div>
+        </div>
+      `;
+    }
+
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(lastReadMarkdown || "");
+        const original = copyBtn.textContent;
+        copyBtn.textContent = "✓ コピーしました";
+        copyBtn.classList.add("text-green-700");
+        setTimeout(() => {
+          copyBtn.textContent = original;
+          copyBtn.classList.remove("text-green-700");
+        }, 1200);
+      } catch {
+        alert("コピーに失敗しました（ブラウザの権限設定をご確認ください）");
+      }
+    });
+
+    // ★ tool -> API path mapping
+    function apiPathForTool(tool) {
+      if (tool === "aws___search_documentation") return "/api/search";
+      if (tool === "aws___ask") return "/api/ask";
+      if (tool === "aws___read_documentation") return "/api/read";
+      if (tool === "aws___recommend") return "/api/recommend";
+      if (tool === "aws___list_regions") return "/api/list_regions";
+      if (tool === "aws___get_regional_availability") return "/api/get_regional_availability";
+      return "/api/search";
+    }
+
+    async function readResponseAsJsonOrText(res) {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const text = await res.text();
+      rawEl.textContent = text;
+
+      if (ct.includes("application/json")) {
+        const j = safeJsonParse(text);
+        if (j) return { kind: "json", value: j };
+        return { kind: "text", value: text };
+      }
+      return { kind: "text", value: text };
+    }
+
+    function parseCommaList(s) {
+      return String(s || "")
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+    }
+
+    function buildAvailabilityParamsFromForm() {
+      const params = {};
+      const region = (document.getElementById("gaRegion").value || "").trim();
+      const resourceType = (document.getElementById("gaResourceType").value || "").trim();
+      const filters = parseCommaList(document.getElementById("gaFilters").value || "");
+      const nextToken = (document.getElementById("gaNextToken").value || "").trim();
+
+      if (region) params.region = region;
+      if (resourceType) params.resource_type = resourceType;
+      if (filters.length > 0) params.filters = filters;
+      if (nextToken) params.next_token = nextToken;
+
+      return params;
+    }
+
+    function buildAvailabilityParams() {
+      // JSON override first
+      const jsonText = (document.getElementById("gaJson").value || "").trim();
+      if (jsonText) {
+        const j = safeJsonParse(jsonText);
+        if (j && typeof j === "object" && !Array.isArray(j)) return j;
+        flashJsonHint();
+      }
+      return buildAvailabilityParamsFromForm();
+    }
+
+    function validateAvailabilityParams(params) {
+      const missing = [];
+      if (!params || typeof params !== "object") return ["region", "resource_type"];
+      if (!params.region) missing.push("region");
+      if (!params.resource_type) missing.push("resource_type");
+      return missing;
+    }
+
+    runBtn.addEventListener("click", async () => {
+      clearOutput();
+      setStatus("実行中...");
+
+      const tool = toolSelect.value;
+      const params = {};
+
+      if (tool === "aws___search_documentation" || tool === "aws___ask") {
+        params.search_phrase = document.getElementById("searchPhrase").value || "";
+        params.limit = 10;
+        const topics = topicCheckboxes.filter(x => x.checked).map(x => x.value);
+        if (topics.length > 0) params.topics = topics.slice(0, 3);
+
+        if (tool === "aws___ask") {
+          params.read_top_k = Number(document.getElementById("askReadTopK").value || 3);
+          params.read_max_length = Number(document.getElementById("askReadMaxLen").value || 6000);
+        }
+
+      } else if (tool === "aws___read_documentation" || tool === "aws___recommend") {
+        params.url = document.getElementById("urlInput").value || "";
+
+      } else if (tool === "aws___list_regions") {
+        // no params
+
+      } else if (tool === "aws___get_regional_availability") {
+        Object.assign(params, buildAvailabilityParams());
+
+        const missing = validateAvailabilityParams(params);
+        if (missing.length > 0) {
+          renderErrorBox(`必須パラメータが不足しています: ${missing.join(", ")}\n例: {"region":"ap-northeast-1","resource_type":"cfn","filters":["AWS::Lambda::Function"]}`);
+          setStatus("");
+          return;
+        }
+      }
+
+      if (tool === "aws___read_documentation") {
+        copyBtn.classList.remove("hidden");
+        copyBtn.disabled = true;
+      } else {
+        copyBtn.classList.add("hidden");
+        copyBtn.disabled = true;
+      }
+
+      const apiPath = apiPathForTool(tool);
+
+      try {
+        const res = await fetch(apiPath, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ params }),
+        });
+
+        const parsed = await readResponseAsJsonOrText(res);
+
+        if (!res.ok) {
+          const msg = (parsed.kind === "json")
+            ? (parsed.value?.message || JSON.stringify(parsed.value))
+            : parsed.value;
+
+          renderErrorBox(`HTTP ${res.status}\n${String(msg).slice(0, 4000)}`);
+          setStatus("");
+          return;
+        }
+
+        if (parsed.kind !== "json") {
+          renderErrorBox(`JSONではない応答が返ってきました（APIパスやCloudFrontのエラールーティングを確認してください）\n\n${String(parsed.value).slice(0, 4000)}`);
+          setStatus("");
+          return;
+        }
+
+        const apiJson = parsed.value;
+        rawEl.textContent = JSON.stringify(apiJson, null, 2);
+
+        // outer envelope error
+        const outerErr = getErrorText(apiJson);
+        if (outerErr) {
+          renderErrorBox(outerErr);
+          setStatus("");
+          return;
+        }
+
+        // ask は独自形式（summary/refs/search）
+        if (tool === "aws___ask") {
+          renderAskResult(apiJson);
+          setStatus("完了");
+          setTimeout(() => setStatus(""), 1200);
+          return;
+        }
+
+        const inner = getMcpInnerResult(apiJson);
+
+        if (inner === null && tool === "aws___get_regional_availability") {
+          renderErrorBox("結果の取り出しに失敗しました。Raw を確認してください（ツール応答が想定フォーマットと異なる可能性があります）。");
+          setStatus("");
+          return;
+        }
+
+        if (tool === "aws___search_documentation") {
+          renderSearchResults(inner);
+        } else if (tool === "aws___read_documentation") {
+          renderReadResult(inner);
+        } else if (tool === "aws___recommend") {
+          renderRecommend(inner);
+        } else if (tool === "aws___list_regions") {
+          renderRegions(inner);
+        } else if (tool === "aws___get_regional_availability") {
+          renderAvailability(inner);
+        } else {
+          renderEl.innerHTML = `<div class="text-slate-700">${escapeHtml(String(inner ?? ""))}</div>`;
+        }
+
+        setStatus("完了");
+        setTimeout(() => setStatus(""), 1200);
+
+      } catch (e) {
+        renderErrorBox(String(e));
+        setStatus("");
+      }
+    });
+
+    clearBtn.addEventListener("click", clearOutput);
+  </script>
+</body>
+</html>

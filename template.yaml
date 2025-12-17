@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Knowledge MCP Browser Proxy (5 tools, 5 Lambdas, shared Lambda Layer)
+
+Parameters:
+  OriginVerifySecret:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Shared secret sent from CloudFront to API as X-Origin-Verify header to prevent direct API access."
+  PriceClass:
+    Type: String
+    Default: PriceClass_200
+    AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
+    Description: "CloudFront price class"
+  BedrockModelId:
+    Type: String
+    Default: "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    Description: "Bedrock model id"
+  MaxCharsForSummary:
+    Type: Number
+    Default: 18000
+    Description: "Max chars passed into Bedrock (truncate for safety)"
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        MCP_ENDPOINT: "https://knowledge-mcp.global.api.aws"
+        PROTOCOL_VERSION: "2025-03-26"
+        ORIGIN_VERIFY_SECRET: !Ref OriginVerifySecret
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        MAX_CHARS_FOR_SUMMARY: !Ref MaxCharsForSummary
+
+Resources:
+  # ======================
+  # Lambda Layer
+  # ======================
+  ProxyLibLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "${AWS::StackName}-proxy-lib"
+      ContentUri: layer/
+      CompatibleRuntimes: [python3.13]
+      RetentionPolicy: Retain
+
+  # ======================
+  # HTTP API
+  # ======================
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+        AllowHeaders: ["content-type", "x-origin-verify"]
+        AllowMethods: ["GET", "POST", "OPTIONS"]
+
+  # ======================
+  # search (+ health / options)
+  # ======================
+  SearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/search/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+      Events:
+        SearchApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/search
+            Method: POST
+        HealthApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/health
+            Method: GET
+        OptionsAny:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: OPTIONS
+
+  # ======================
+  # read
+  # ======================
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/read/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+      Events:
+        ReadApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/read
+            Method: POST
+
+  # ======================
+  # recommend
+  # ======================
+  RecommendFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/recommend/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+      Events:
+        RecommendApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/recommend
+            Method: POST
+
+  # ======================
+  # list_regions
+  # ======================
+  ListRegionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/list_regions/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+      Events:
+        ListRegionsApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/list_regions
+            Method: POST
+
+  # ======================
+  # get_regional_availability
+  # ======================
+  GetRegionalAvailabilityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/get_regional_availability/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+      Events:
+        GetRegionalAvailabilityApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/get_regional_availability
+            Method: POST
+  # ======================
+  # ask (MCP -> Bedrock summary)
+  # ======================
+  AskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/ask/
+      Handler: app.handler
+      Layers: [!Ref ProxyLibLayer]
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSXrayWriteOnlyAccess
+        # For some reason, it throws an error unless you specify the arn.
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonBedrockLimitedAccess
+      Events:
+        AskApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/ask
+            Method: POST
+
+  # ======================
+  # S3 (Web)
+  # ======================
+  WebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: ["s3:GetObject"]
+            Resource: !Sub "${WebBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}"
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ======================
+  # CloudFront
+  # ======================
+  WebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: !Ref PriceClass
+        Origins:
+          - Id: WebOrigin
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref OriginAccessControl
+
+          - Id: ApiOrigin
+            DomainName: !Sub "${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            OriginPath: "/prod"
+            OriginCustomHeaders:
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Ref OriginVerifySecret
+
+        DefaultCacheBehavior:
+          TargetOriginId: WebOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+        CacheBehaviors:
+          - PathPattern: "api/*"
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+Outputs:
+  WebUrl:
+    Value: !Sub "https://${WebDistribution.DomainName}/"
+  WebBucketName:
+    Value: !Ref WebBucket
+  ApiBaseUrl:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
