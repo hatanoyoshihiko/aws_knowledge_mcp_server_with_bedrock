@@ -101,6 +101,10 @@ flowchart LR
 | `POST /api/list_regions` | `aws___list_regions` | Retrieves a list of all regions provided by AWS and returns the region codes and names. |
 | `POST /api/get_regional_availavility` | `aws___get_regional_availability` | Determines whether AWS services, APIs, and CloudFormation resources are **available** in the specified region and returns their availability status. |
 
+## Communication Mechanism
+
+MCP Response (Raw Data) → Normalization → Cleaning/Trimming → Conversion to Bedrock Messages → Bedrock Response Extraction → HTML Formatting and Return
+
 ## Deploy using AWS SAM
 
 note: `OriginVerifySecret` defines the value of the X-Origin-Verify header used to enforce connection restrictions to the API Gateway.
