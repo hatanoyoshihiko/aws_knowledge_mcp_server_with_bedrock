@@ -95,7 +95,7 @@ flowchart LR
 | Endpoint | MCP Tool | 機能概要（日本語要約） |
 | ---| ---| --- |
 | `POST /api/search` | `aws___search_documentation` | Searches the entire AWS official documentation and returns up to **10** highly relevant results. You can narrow the search scope by specifying a topic. |
-| `POST /api/ask` | *(custom)* | `search` → 上位ページを `read` → **Amazon Bedrock（Claude）で要約**して回答します。 |
+| `POST /api/ask` | *(custom)* | `search` → It will summarize the top-level page using Amazon Bedrock (Claude) and provide a response. |
 | `POST /api/read` | `aws___read_documentation` | Retrieves the content of the specified AWS documentation URL and returns it converted into readable Markdown format. |
 | `POST /api/recommend` | `aws___recommend` | Based on the specified AWS documentation page, it retrieves highly relevant recommended documentation. |
 | `POST /api/list_regions` | `aws___list_regions` | Retrieves a list of all regions provided by AWS and returns the region codes and names. |
